@@ -88,8 +88,39 @@ float findBlocker( sampler2D shadowMap,  vec2 uv, float zReceiver ) {
 	return 1.0;
 }
 
-float PCF(sampler2D shadowMap, vec4 coords) {
-  return 1.0;
+float PCF(sampler2D shadowMap, vec4 shadowCoord){
+  float fragDepth = shadowCoord.z;
+  poissonDiskSamples(shadowCoord.xy);
+  float texelSizeUV = 1.0 / 800.0;
+  float finalVisibility = 0.0;
+  for( int i = 0; i < NUM_SAMPLES; i ++ )
+  {
+    vec2 sampleCoord = poissonDisk[i] * texelSizeUV + shadowCoord.xy;
+    float sampleDepth = unpack(texture2D(shadowMap, sampleCoord));
+    if(fragDepth < sampleDepth+0.005){
+      finalVisibility += 1.0;
+    }
+  }
+  finalVisibility = finalVisibility / float(NUM_SAMPLES);
+  return finalVisibility;
+}
+
+float PCF_avg(sampler2D shadowMap, vec4 shadowCoord){
+  float fragDepth = shadowCoord.z;
+  float texelSizeUV = 1.0 / 2048.0;
+  float finalVisibility = 0.0;
+  for (int x = -3; x <= 3; x++) {
+      for (int y = -3; y <= 3; y++) {
+          vec2 offset = texelSizeUV * vec2(x,y);
+          vec2 sampleCoord = offset + shadowCoord.xy;
+          float sampleDepth = unpack(texture2D(shadowMap, sampleCoord));
+          if(fragDepth < sampleDepth+0.005) {
+            finalVisibility += 1.0;
+          }
+      }
+  }
+  finalVisibility = finalVisibility / 49.0;
+  return finalVisibility;
 }
 
 float PCSS(sampler2D shadowMap, vec4 coords){
@@ -149,8 +180,9 @@ void main(void) {
   vec3 shadowCoord = vPositionFromLight.xyz / vPositionFromLight.w;
   //convert to shadow map uv space (the screen space when rendering the shadow map)
   shadowCoord = shadowCoord * 0.5 + 0.5;
-  visibility = useShadowMap(uShadowMap, vec4(shadowCoord, 1.0));
+  //visibility = useShadowMap(uShadowMap, vec4(shadowCoord, 1.0));
   //visibility = PCF(uShadowMap, vec4(shadowCoord, 1.0));
+  visibility = PCF_avg(uShadowMap, vec4(shadowCoord, 1.0));
   //visibility = PCSS(uShadowMap, vec4(shadowCoord, 1.0));
 
   vec3 phongColor = blinnPhong();
